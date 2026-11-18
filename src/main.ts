@@ -46,7 +46,7 @@ let levelIndex: number | null = 1;
 let hintId: number | null = null;
 let needsRender = true;
 let shake = { start: 0, ms: 0, power: 0 };
-/** After the last strand leaves: wait for it to fly off, pop the picture back in, then show the card. */
+/** After the last piece leaves: wait for it to fly off, pop the picture back in, then show the card. */
 let celebration: { stage: 'wait' | 'reveal' | 'done'; at: number } | null = null;
 /** 0 = no tutorial, 1 = waiting for the first tap, 2 = a few more guided moves. */
 let coachStage = 0;
@@ -104,7 +104,7 @@ function startLevel(next: Level, index: number | null): void {
 
   coachStage = index === 1 && !wasCoached() ? 1 : 0;
   if (coachStage === 1) {
-    hud.coach('点一条毛线，它会顺着箭头溜出去');
+    hud.coach('点一个箭头，它会带着身后的格子滑出去');
     hintId = session.hint()?.id ?? null;
   } else {
     hud.coach(null);
@@ -116,12 +116,12 @@ function restart(): void {
   if (level) startLevel(level, levelIndex);
 }
 
-/** Rings where the yarn used to lie, timed to the tail passing, and sparkles where the head exits. */
+/** A flash on each cell as the tail leaves it, and sparkles where the head exits. */
 function spawnEscapeFx(piece: Piece, flight: Flight, now: number): void {
   if (!level) return;
   const n = piece.cells.length;
   piece.cells.forEach((cell, i) => {
-    effects.puff(cell.x, cell.y, level?.palette[piece.colors[i]] ?? '#ffffff', now + escapeTimeAt(flight, n - 1 - i));
+    effects.puff(cell.x, cell.y, '#ffffff', now + escapeTimeAt(flight, n - i));
   });
   const head = piece.cells[0];
   const [dx, dy] = DIRS[piece.dir];
@@ -150,7 +150,7 @@ function onImpact(flight: Flight): void {
   }
   if (!bounceTipShown) {
     bounceTipShown = true;
-    hud.toast('被挡住了，先送走挡路的那条');
+    hud.toast('前面有格子挡着，先清掉它');
   }
 }
 
@@ -256,7 +256,7 @@ function showHint(): void {
   if (!session || !level) return;
   const piece = session.hint();
   if (!piece) {
-    if (!session.won) hud.toast('稍等，毛线还在路上');
+    if (!session.won) hud.toast('稍等，格子还在路上');
     return;
   }
   sfx.tick();
@@ -455,7 +455,7 @@ if (import.meta.env.DEV) {
     },
     camera,
     renderer,
-    /** Taps a strand by id (or the next movable one), as a real tap on its head would. */
+    /** Taps a piece by id (or the next movable one), as a real tap on its head would. */
     step(id?: number): boolean {
       const piece = id === undefined ? session?.hint() : session?.board.pieces[id];
       if (!piece) return false;

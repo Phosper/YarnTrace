@@ -1,7 +1,7 @@
 {
   "name": "YarnTrace · 剥图消消",
   "short_name": "YarnTrace",
-  "description": "点一下，让毛线顺着箭头溜走，把整张像素画拆干净。不限时、不会失败。",
+  "description": "点箭头，让一串格子顺着箭头滑走，把整张像素画拆干净。不限时、不会失败。",
   "lang": "zh-CN",
   "start_url": ".",
   "scope": ".",

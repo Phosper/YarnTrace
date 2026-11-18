@@ -53,7 +53,7 @@ describe('splitArt', () => {
     }
   });
 
-  it('never grows a strand straight ahead of its own head', () => {
+  it('never grows a piece straight ahead of its own head', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const art = sampleArt(seed);
       for (const piece of splitArt(art, { minLen: 3, maxLen: 9 }, mulberry32(seed * 3))) {

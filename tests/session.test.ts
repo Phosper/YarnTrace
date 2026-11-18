@@ -84,7 +84,7 @@ describe('Session', () => {
     expect(session.misses).toBe(1);
     expect(Array.from(session.board.occ)).toEqual(before);
 
-    // The bouncing strand ignores further taps until it is back in place.
+    // The bouncing piece ignores further taps until it is back in place.
     expect(session.tap(1, 2, 10, false).kind).toBe('none');
     expect(session.misses).toBe(1);
 
@@ -94,7 +94,7 @@ describe('Session', () => {
     expect(Array.from(session.board.occ)).toEqual(before);
   });
 
-  it('keeps taking taps while other strands are still moving', () => {
+  it('keeps taking taps while other pieces are still moving', () => {
     const level = levelOf(4, 4, [single(0, 1, 2, 0), single(1, 1, 1, 0), single(2, 3, 3, 1)]);
     const session = new Session(level, 'head-ray', 0);
 
@@ -104,13 +104,13 @@ describe('Session', () => {
     expect(session.flights).toHaveLength(3);
     expect(session.moves).toBe(2);
 
-    // The blocker is gone, so once the first strand is back it can leave too.
+    // The blocker is gone, so once the first piece is back it can leave too.
     session.update(5000);
     expect(session.tap(1, 2, 5000, false).kind).toBe('win');
     expect(session.won).toBe(true);
   });
 
-  it('frees the cells at once and lets the strand keep flying', () => {
+  it('frees the cells at once and lets the piece keep flying', () => {
     const level = levelOf(3, 3, [single(0, 1, 2, 1)]);
     const session = new Session(level, 'head-ray', 0);
     expect(session.tap(1, 2, 0, false).kind).toBe('win');

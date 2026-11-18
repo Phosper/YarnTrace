@@ -150,13 +150,13 @@ export class Overlays {
           <div><h2>设置</h2><p class="sub">只影响手感，不影响关卡。</p></div>
           <button class="chip small" data-act="close" aria-label="关闭">${ICON.close}</button>
         </div>
-        ${row('sound', '音效', '连续送走毛线，音调会一路升高')}
+        ${row('sound', '音效', '连续清掉格子，音调会一路升高')}
         ${row('haptics', '震动', '仅在支持震动的手机上生效')}
         ${row('reduceMotion', '减少动画', '去掉滑出、弹回和庆祝动画')}
         <h3>怎么玩</h3>
         <ul class="howto">
-          <li>点一条毛线，它会顺着箭头溜出棋盘。</li>
-          <li>前面有东西挡着就会弹回来，先把挡路的送走。</li>
+          <li>点一个箭头，它会带着身后的一串格子顺着箭头滑出棋盘。</li>
+          <li>箭头前方只要有格子挡着就会弹回来，先把挡路的清掉。</li>
           <li>不限时、不会失败；少碰壁能拿到更多星星。</li>
           <li>双指捏合或滚轮缩放，拖动平移。</li>
         </ul>

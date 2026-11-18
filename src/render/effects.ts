@@ -1,6 +1,6 @@
 import type { Camera } from './camera';
 
-type Kind = 'dot' | 'ring' | 'spark';
+type Kind = 'dot' | 'ring' | 'spark' | 'tile';
 
 /** A particle in board space (cell units), moved analytically from its age. */
 interface Mote {
@@ -47,23 +47,23 @@ export class Effects {
     this.flakes = [];
   }
 
-  /** A soft ring where a cell of yarn has just been pulled away. */
+  /** A square flash on a cell the moment it is vacated. */
   puff(x: number, y: number, color: string, born: number): void {
     this.motes.push({
-      kind: 'ring',
+      kind: 'tile',
       x: x + 0.5,
       y: y + 0.5,
       vx: 0,
       vy: 0,
       gravity: 0,
       born,
-      life: 340,
-      size: 0.46,
+      life: 300,
+      size: 1,
       color,
     });
   }
 
-  /** Sparkles thrown forward as a strand leaves the board. */
+  /** Sparkles thrown forward as a piece leaves the board. */
   burst(x: number, y: number, dx: number, dy: number, colors: readonly string[], born: number): void {
     for (let i = 0; i < 7; i++) {
       const spread = (Math.random() - 0.5) * 5;
@@ -83,7 +83,7 @@ export class Effects {
     }
   }
 
-  /** The knock when a strand runs into something. */
+  /** The knock when a piece runs into something. */
   impact(x: number, y: number, born: number): void {
     this.motes.push({ kind: 'ring', x, y, vx: 0, vy: 0, gravity: 0, born, life: 300, size: 0.8, color: '#ff5c78' });
     for (let i = 0; i < 6; i++) {
@@ -142,6 +142,14 @@ export class Effects {
       const glide = (1 - Math.exp(-DRAG * s)) / DRAG;
       const px = camera.panX + (m.x + m.vx * glide) * tile;
       const py = camera.panY + (m.y + m.vy * glide + 0.5 * m.gravity * s * s) * tile;
+
+      if (m.kind === 'tile') {
+        const side = tile * m.size * (1 - t * 0.35);
+        ctx.globalAlpha = 0.6 * (1 - t);
+        ctx.fillStyle = m.color;
+        ctx.fillRect(px - side / 2, py - side / 2, side, side);
+        continue;
+      }
 
       if (m.kind === 'ring') {
         const grow = 1 - (1 - t) ** 3;

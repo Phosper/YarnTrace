@@ -1,11 +1,10 @@
 import { artOfLevel } from '../game/generator';
 import type { Board } from '../game/rules';
 import type { Flight } from '../game/session';
-import type { Art, Dir, Level } from '../game/types';
+import type { Art, Level } from '../game/types';
 import type { Camera } from './camera';
 import type { Effects } from './effects';
-import { SpriteCache } from './sprites';
-import { OUTER, drawStrand, tracePiece } from './strand';
+import { arrowInk, drawSliding, paintArrow, tracePiece, type ArrowInk } from './piecePaint';
 
 export interface DrawState {
   now: number;
@@ -18,8 +17,9 @@ export interface DrawState {
   reveal: number | null;
 }
 
-/** How strongly the picture shows through under and between the strands. */
-const UNDERLAY = 0.38;
+/** How strongly the picture ghosts through where cells have already been cleared. */
+const UNDERLAY = 0.16;
+const GRID = 'rgba(74, 60, 140, 0.16)';
 const REVEAL_STEP = 24;
 const REVEAL_POP = 260;
 
@@ -45,12 +45,10 @@ function roundRect(
 
 export class BoardRenderer {
   private ctx: CanvasRenderingContext2D;
-  private sprites: SpriteCache | null = null;
+  private inks: ArrowInk[] = [];
   private art: Art | null = null;
   /** The picture at one pixel per cell; scaled up without smoothing it is the underlay. */
   private underlay: HTMLCanvasElement | null = null;
-  private links = new Uint8Array(0);
-  private heads = new Int8Array(0);
   private backdrop = document.createElement('canvas');
   private dpr = 1;
   private cssW = 0;
@@ -68,21 +66,7 @@ export class BoardRenderer {
     const { w, h } = level;
     const art = artOfLevel(level);
     this.art = art;
-    this.sprites = new SpriteCache(level.palette);
-
-    this.links = new Uint8Array(w * h);
-    this.heads = new Int8Array(w * h).fill(-1);
-    for (const piece of level.pieces) {
-      const cells = piece.cells;
-      this.heads[cells[0].y * w + cells[0].x] = piece.dir;
-      for (let i = 1; i < cells.length; i++) {
-        const a = cells[i - 1];
-        const b = cells[i];
-        const dir = b.x > a.x ? 1 : b.x < a.x ? 3 : b.y > a.y ? 2 : 0;
-        this.links[a.y * w + a.x] |= 1 << dir;
-        this.links[b.y * w + b.x] |= 1 << ((dir + 2) % 4);
-      }
-    }
+    this.inks = level.palette.map(arrowInk);
 
     const underlay = document.createElement('canvas');
     underlay.width = w;
@@ -148,11 +132,11 @@ export class BoardRenderer {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.backdrop, 0, 0, cssW, cssH);
 
-    const sprites = this.sprites;
     const art = this.art;
     const underlay = this.underlay;
+    const inks = this.inks;
     const tile = camera.tile;
-    if (!sprites || !art || !underlay || tile < 2) return;
+    if (!art || !underlay || tile < 2) return;
 
     const { w, h } = board;
     // Tile edges are snapped to device pixels so neighbouring tiles abut without seams.
@@ -167,7 +151,7 @@ export class BoardRenderer {
 
     const pad = Math.min(22, tile * 0.7);
     const radius = Math.min(30, tile * 1.2);
-    // A shallow tray: a pale lip below, then the darker well the yarn sits in.
+    // A shallow tray: a pale lip below, then the darker well the picture sits in.
     roundRect(ctx, left - pad, top - pad + 2, right - left + pad * 2, bottom - top + pad * 2, radius);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.fill();
@@ -187,72 +171,83 @@ export class BoardRenderer {
     const x1 = Math.min(w, Math.ceil((cssW - camera.panX) / tile));
     const y1 = Math.min(h, Math.ceil((cssH - camera.panY) / tile));
 
-    if (state.hintId !== null) {
-      const hinted = board.pieces[state.hintId];
-      if (hinted) {
-        const pulse = 0.5 + 0.5 * Math.sin(state.now / 190);
-        ctx.save();
-        ctx.translate(camera.panX, camera.panY);
-        ctx.scale(tile, tile);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        tracePiece(ctx, hinted);
-        // Violet outside, white inside: the ring reads against any picture colour.
-        ctx.strokeStyle = `rgba(124, 108, 240, ${0.5 + pulse * 0.4})`;
-        ctx.lineWidth = 1.42 + pulse * 0.24;
-        ctx.stroke();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.14;
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
+    // The board shows the picture as plain cells on a grid. Which cells travel
+    // together is deliberately not drawn: only each piece's head carries an arrow.
+    const line = Math.max(1, Math.round(tile * dpr * 0.045)) / dpr;
+    const anyBusy = state.flights.some((f) => f.kind === 'bounce');
+    const hidden = (pieceId: number): boolean => anyBusy && state.isBusy(pieceId);
 
-    if (x1 > x0 && y1 > y0) {
-      sprites.setTile(tile * dpr);
+    if (x1 > x0 && y1 > y0 && !revealed) {
       const xs: number[] = [];
       const ys: number[] = [];
       for (let x = x0; x <= x1; x++) xs.push(snap(camera.panX + x * tile));
       for (let y = y0; y <= y1; y++) ys.push(snap(camera.panY + y * tile));
-      const anyBusy = state.flights.some((f) => f.kind === 'bounce');
 
+      ctx.fillStyle = GRID;
+      for (const x of xs) ctx.fillRect(x, top, line, bottom - top + line);
+      for (const y of ys) ctx.fillRect(left, y, right - left + line, line);
+
+      // Cells start after the grid line, so the grid stays visible between them.
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const at = y * w + x;
           const v = board.occ[at];
-          if (v === 0 || (anyBusy && state.isBusy(v - 1))) continue;
-          const sprite = sprites.get(board.color[at], this.links[at], this.heads[at] as Dir | -1);
-          const px = xs[x - x0];
-          const py = ys[y - y0];
-          ctx.drawImage(sprite, px, py, xs[x - x0 + 1] - px, ys[y - y0 + 1] - py);
+          if (v === 0 || hidden(v - 1)) continue;
+          const px = xs[x - x0] + line;
+          const py = ys[y - y0] + line;
+          ctx.fillStyle = art.palette[board.color[at]];
+          ctx.fillRect(px, py, xs[x - x0 + 1] - px, ys[y - y0 + 1] - py);
         }
       }
     }
 
-    if (state.flights.length > 0) {
-      ctx.save();
-      ctx.translate(camera.panX, camera.panY);
-      ctx.scale(tile, tile);
-      for (const f of state.flights) {
-        ctx.globalAlpha = f.kind === 'escape' ? Math.min(1, (1 - f.progress) / 0.22) : 1;
-        drawStrand(ctx, f.piece, sprites.tones, f.offset);
-      }
-      ctx.globalAlpha = 1;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (const f of state.flights) {
-        if (f.flash <= 0 || f.blockerId === null) continue;
-        const blocker = board.pieces[f.blockerId];
-        if (!blocker) continue;
-        ctx.beginPath();
-        tracePiece(ctx, blocker);
-        ctx.strokeStyle = `rgba(255, 60, 96, ${0.62 * f.flash})`;
-        ctx.lineWidth = OUTER;
-        ctx.stroke();
-      }
-      ctx.restore();
+    ctx.save();
+    ctx.translate(camera.panX + line / 2, camera.panY + line / 2);
+    ctx.scale(tile, tile);
+
+    for (const piece of board.pieces) {
+      if (!piece || piece.id === state.hintId || hidden(piece.id)) continue;
+      const head = piece.cells[0];
+      if (head.x < x0 || head.x >= x1 || head.y < y0 || head.y >= y1) continue;
+      paintArrow(ctx, head.x + 0.5, head.y + 0.5, piece.dir, inks[piece.colors[0]]);
     }
+
+    const hinted = state.hintId === null ? null : board.pieces[state.hintId];
+    if (hinted) {
+      const pulse = 0.5 + 0.5 * Math.sin(state.now / 190);
+      ctx.lineCap = 'square';
+      ctx.lineJoin = 'miter';
+      ctx.beginPath();
+      tracePiece(ctx, hinted);
+      // Violet outside, white inside: the ring reads against any picture colour.
+      ctx.strokeStyle = `rgba(124, 108, 240, ${0.55 + pulse * 0.4})`;
+      ctx.lineWidth = 1.4 + pulse * 0.2;
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.16;
+      ctx.stroke();
+      drawSliding(ctx, hinted, art.palette, inks, 0);
+    }
+
+    for (const f of state.flights) {
+      ctx.globalAlpha = f.kind === 'escape' ? Math.min(1, (1 - f.progress) / 0.22) : 1;
+      drawSliding(ctx, f.piece, art.palette, inks, f.offset);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    for (const f of state.flights) {
+      if (f.flash <= 0 || f.blockerId === null) continue;
+      const blocker = board.pieces[f.blockerId];
+      if (!blocker) continue;
+      ctx.beginPath();
+      tracePiece(ctx, blocker);
+      ctx.strokeStyle = `rgba(255, 60, 96, ${0.6 * f.flash})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    ctx.restore();
 
     effects.drawBoard(ctx, camera, state.now);
 

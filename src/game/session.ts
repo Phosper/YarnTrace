@@ -12,7 +12,7 @@ import { DIRS, type CollisionMode, type Level, type Piece } from './types';
 
 export type FlightKind = 'escape' | 'bounce';
 
-/** One strand in motion. The strand slides head-first along its own path. */
+/** One piece in motion. The piece slides head-first along its own path. */
 export interface Flight {
   piece: Piece;
   kind: FlightKind;
@@ -63,7 +63,7 @@ export class Session {
   won = false;
   startedAt: number;
   finishedAt: number | null = null;
-  /** Called once when a blocked strand reaches whatever stopped it. */
+  /** Called once when a blocked piece reaches whatever stopped it. */
   onImpact: ((flight: Flight) => void) | null = null;
   private busy = new Set<number>();
 
@@ -77,7 +77,7 @@ export class Session {
   }
 
   /**
-   * Taps never queue behind an animation: an escaping strand leaves the board
+   * Taps never queue behind an animation: an escaping piece leaves the board
    * state at once and only its picture keeps flying, so the next tap is judged
    * against the board as it will be.
    */
@@ -140,7 +140,7 @@ export class Session {
     return { kind: 'bounce', piece };
   }
 
-  /** Advances every strand in flight; returns true while anything still moves. */
+  /** Advances every piece in flight; returns true while anything still moves. */
   update(now: number): boolean {
     if (this.flights.length === 0) return false;
     const alive: Flight[] = [];
