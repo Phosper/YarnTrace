@@ -1,0 +1,17 @@
+{
+  "name": "YarnTrace · 剥图消消",
+  "short_name": "YarnTrace",
+  "description": "点一下，让毛线顺着箭头溜走，把整张像素画拆干净。不限时、不会失败。",
+  "lang": "zh-CN",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f1ecff",
+  "theme_color": "#f1ecff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

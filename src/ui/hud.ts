@@ -1,58 +1,74 @@
+import { ICON } from './icons';
+
 export interface HudCallbacks {
   onRestart: () => void;
   onSettings: () => void;
   onLevels: () => void;
   onHint: () => void;
-  onGuides: () => void;
-  onZoom: (value: number) => void;
+  onFit: () => void;
 }
 
 export interface Hud {
   setTitle: (name: string) => void;
-  setProgress: (left: number, total: number) => void;
-  setGuides: (on: boolean) => void;
-  setZoom: (value: number) => void;
+  setProgress: (cleared: number, total: number) => void;
+  setCombo: (streak: number) => void;
   toast: (text: string) => void;
+  /** Shows the onboarding bubble, or hides it when given null. */
+  coach: (text: string | null) => void;
 }
 
-export function createHud(callbacks: HudCallbacks): Hud {
-  const title = document.getElementById('level-name') as HTMLElement;
-  const progress = document.getElementById('level-progress') as HTMLElement;
-  const guides = document.getElementById('btn-guides') as HTMLButtonElement;
-  const zoom = document.getElementById('zoom') as HTMLInputElement;
+const COMBO_FROM = 3;
 
-  const toast = document.createElement('div');
-  toast.className = 'hint-toast';
-  document.getElementById('app')?.appendChild(toast);
+export function createHud(callbacks: HudCallbacks): Hud {
+  const el = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+  const title = el('level-name');
+  const progress = el('level-progress');
+  const meter = el('meter-fill');
+  const combo = el('combo');
+  const coach = el('coach');
+  const toast = el('toast');
   let toastTimer = 0;
 
-  (document.getElementById('btn-restart') as HTMLElement).addEventListener('click', callbacks.onRestart);
-  (document.getElementById('btn-settings') as HTMLElement).addEventListener('click', callbacks.onSettings);
-  (document.getElementById('btn-levels') as HTMLElement).addEventListener('click', callbacks.onLevels);
-  (document.getElementById('btn-hint') as HTMLElement).addEventListener('click', callbacks.onHint);
-  guides.addEventListener('click', callbacks.onGuides);
-
-  zoom.addEventListener('input', () => callbacks.onZoom(Number(zoom.value)));
-  zoom.addEventListener('change', () => callbacks.onZoom(Number(zoom.value)));
+  const wire = (id: string, icon: string, handler: () => void): void => {
+    const button = el(id);
+    button.insertAdjacentHTML('afterbegin', icon);
+    button.addEventListener('click', handler);
+  };
+  wire('btn-levels', ICON.levels, callbacks.onLevels);
+  wire('btn-settings', ICON.settings, callbacks.onSettings);
+  wire('btn-restart', ICON.restart, callbacks.onRestart);
+  wire('btn-hint', ICON.hint, callbacks.onHint);
+  wire('btn-fit', ICON.fit, callbacks.onFit);
 
   return {
     setTitle(name) {
       title.textContent = name;
     },
-    setProgress(left, total) {
-      progress.textContent = `${left} / ${total} 团`;
+    setProgress(cleared, total) {
+      progress.textContent = `${cleared} / ${total}`;
+      meter.style.width = `${total > 0 ? (cleared / total) * 100 : 0}%`;
     },
-    setGuides(on) {
-      guides.classList.toggle('active', on);
-    },
-    setZoom(value) {
-      zoom.value = String(Math.min(3, Math.max(0.35, value)));
+    setCombo(streak) {
+      if (streak < COMBO_FROM) {
+        combo.classList.remove('show');
+        return;
+      }
+      combo.textContent = `连击 ×${streak}`;
+      combo.classList.add('show');
+      // Restart the pop animation on every new step of the streak.
+      combo.classList.remove('pop');
+      void combo.offsetWidth;
+      combo.classList.add('pop');
     },
     toast(text) {
       toast.textContent = text;
       toast.classList.add('show');
       window.clearTimeout(toastTimer);
-      toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1800);
+      toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1900);
+    },
+    coach(text) {
+      coach.textContent = text ?? '';
+      coach.classList.toggle('hidden', text === null);
     },
   };
 }

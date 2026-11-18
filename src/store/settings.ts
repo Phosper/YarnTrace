@@ -1,5 +1,6 @@
 export interface Settings {
-  guides: boolean;
+  sound: boolean;
+  haptics: boolean;
   reduceMotion: boolean;
 }
 
@@ -10,7 +11,7 @@ function defaults(): Settings {
     typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false;
-  return { guides: true, reduceMotion: prefersLess };
+  return { sound: true, haptics: true, reduceMotion: prefersLess };
 }
 
 export function loadSettings(): Settings {
@@ -20,7 +21,8 @@ export function loadSettings(): Settings {
     if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return {
-      guides: typeof parsed.guides === 'boolean' ? parsed.guides : base.guides,
+      sound: typeof parsed.sound === 'boolean' ? parsed.sound : base.sound,
+      haptics: typeof parsed.haptics === 'boolean' ? parsed.haptics : base.haptics,
       reduceMotion: typeof parsed.reduceMotion === 'boolean' ? parsed.reduceMotion : base.reduceMotion,
     };
   } catch {

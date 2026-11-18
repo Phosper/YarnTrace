@@ -174,3 +174,14 @@ export function generateLevel(art: Art, opts: GenOptions, spec: LevelSpec): Leve
     meta: { level: spec.level, seed: spec.seed },
   };
 }
+
+/** Rebuilds the picture a level was cut from, for thumbnails and the board's underlay. */
+export function artOfLevel(level: Level): Art {
+  const color = new Int16Array(level.w * level.h).fill(-1);
+  for (const piece of level.pieces) {
+    piece.cells.forEach((c, i) => {
+      color[c.y * level.w + c.x] = piece.colors[i];
+    });
+  }
+  return { w: level.w, h: level.h, palette: level.palette, color };
+}

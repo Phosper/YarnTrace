@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { generateLevel, splitArt } from '../src/game/generator';
+import { artOfLevel, generateLevel, splitArt } from '../src/game/generator';
 import { mulberry32 } from '../src/game/rng';
 import { createBoard, isMovable, removePiece } from '../src/game/rules';
 import { solve } from '../src/game/solver';
 import type { Art, Piece } from '../src/game/types';
-import { generateArt } from '../src/art/procedural';
-import { TEMPLATES, templateArt } from '../src/art/templates';
+import { PICTURES, pictureArt } from '../src/art/pictures';
 
 function artCells(art: Art): number {
   let n = 0;
@@ -26,31 +25,15 @@ function expectConnected(piece: Piece): void {
   }
 }
 
-describe('procedural art', () => {
-  it('is deterministic for a seed', () => {
-    const a = generateArt(1234, { size: 18 });
-    const b = generateArt(1234, { size: 18 });
-    expect(a.w).toBe(b.w);
-    expect(a.h).toBe(b.h);
-    expect(Array.from(a.color)).toEqual(Array.from(b.color));
-    expect(a.palette).toEqual(b.palette);
-  });
-
-  it('produces a sane mask', () => {
-    for (let seed = 1; seed <= 40; seed++) {
-      const art = generateArt(seed, { size: 16 });
-      expect(art.w).toBeGreaterThanOrEqual(10);
-      expect(art.h).toBeGreaterThanOrEqual(10);
-      expect(artCells(art)).toBeGreaterThan(40);
-      expect(artCells(art)).toBeLessThan(art.w * art.h);
-    }
-  });
-});
+/** Cycles through the picture library at a spread of grid sizes. */
+function sampleArt(seed: number): Art {
+  return pictureArt(PICTURES[seed % PICTURES.length], 12 + (seed % 8) * 3);
+}
 
 describe('splitArt', () => {
   it('covers every art cell exactly once when no holes are cut', () => {
     for (let seed = 1; seed <= 60; seed++) {
-      const art = generateArt(seed, { size: 16 });
+      const art = sampleArt(seed);
       const pieces = splitArt(art, { minLen: 3, maxLen: 7, holeRatio: 0 }, mulberry32(seed));
       expect(coveredCells(pieces)).toBe(artCells(art));
 
@@ -70,9 +53,29 @@ describe('splitArt', () => {
     }
   });
 
+  it('never grows a strand straight ahead of its own head', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const art = sampleArt(seed);
+      for (const piece of splitArt(art, { minLen: 3, maxLen: 9 }, mulberry32(seed * 3))) {
+        const head = piece.cells[0];
+        for (const cell of piece.cells.slice(1)) {
+          const ahead =
+            piece.dir === 0
+              ? cell.x === head.x && cell.y < head.y
+              : piece.dir === 2
+                ? cell.x === head.x && cell.y > head.y
+                : piece.dir === 1
+                  ? cell.y === head.y && cell.x > head.x
+                  : cell.y === head.y && cell.x < head.x;
+          expect(ahead).toBe(false);
+        }
+      }
+    }
+  });
+
   it('carves in an order that is a real solution', () => {
     for (let seed = 1; seed <= 60; seed++) {
-      const art = generateArt(seed, { size: 18 });
+      const art = sampleArt(seed);
       const pieces = splitArt(art, { minLen: 3, maxLen: 8, holeRatio: 0.01 }, mulberry32(seed * 7));
       const level = {
         id: 'x',
@@ -94,10 +97,8 @@ describe('splitArt', () => {
 
   it('always produces a level the greedy solver can clear', () => {
     for (let seed = 1; seed <= 120; seed++) {
-      const size = 12 + (seed % 9) * 3;
-      const art = generateArt(seed * 31, { size });
       const level = generateLevel(
-        art,
+        sampleArt(seed * 31),
         { minLen: 3, maxLen: 9, holeRatio: seed % 4 === 0 ? 0.02 : 0 },
         { id: `t${seed}`, name: 't', seed },
       );
@@ -108,17 +109,12 @@ describe('splitArt', () => {
     }
   });
 
-  it('handles every built-in template', () => {
-    for (const template of TEMPLATES) {
-      const art = templateArt(template.id);
-      expect(art, template.id).not.toBeNull();
-      const level = generateLevel(
-        art as Art,
-        { minLen: 3, maxLen: 7, holeRatio: 0 },
-        { id: template.id, name: template.name, seed: 5 },
-      );
-      expect(level.pieces.length).toBeGreaterThan(0);
-      expect(solve(level, 'swept'), template.id).not.toBeNull();
-    }
+  it('rebuilds the picture a level was cut from', () => {
+    const art = pictureArt(PICTURES[0], 16);
+    const level = generateLevel(art, { minLen: 3, maxLen: 6, holeRatio: 0 }, { id: 'a', name: 'a', seed: 9 });
+    const rebuilt = artOfLevel(level);
+    expect(rebuilt.w).toBe(art.w);
+    expect(rebuilt.h).toBe(art.h);
+    expect(Array.from(rebuilt.color)).toEqual(Array.from(art.color));
   });
 });

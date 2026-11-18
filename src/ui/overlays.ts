@@ -1,22 +1,33 @@
-import { LEVEL_COUNT } from '../game/registry';
-import type { Settings } from '../store/settings';
+import { LEVEL_COUNT, levelArt, levelName } from '../game/registry';
+import type { Art } from '../game/types';
 import type { Progress } from '../store/progress';
+import type { Settings } from '../store/settings';
+import { ICON } from './icons';
+import { paintArt } from './thumb';
 
 export interface LevelPanelOptions {
   current: number | null;
-  cleared: Progress;
+  progress: Progress;
   onPick: (index: number) => void;
   onRandom: () => void;
   onUpload: (file: File) => void;
 }
 
 export interface WinPanelOptions {
-  name: string;
-  moves: number;
+  title: string;
+  art: Art;
+  stars: number;
   ms: number;
+  misses: number;
+  combo: number;
+  /** True when this run beat an earlier clear of the same level. */
+  record: boolean;
+  animate: boolean;
+  onStar: (index: number) => void;
   onAgain: () => void;
   onNext: (() => void) | null;
   onLevels: () => void;
+  onShare: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -26,48 +37,87 @@ function formatTime(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const starRow = (count: number): string =>
+  [0, 1, 2].map((i) => `<i class="star${i < count ? ' on' : ''}">${ICON.star}</i>`).join('');
+
 export class Overlays {
-  constructor(private root: HTMLElement) {}
+  private dismissible = false;
+  private timers: number[] = [];
+
+  constructor(private root: HTMLElement) {
+    root.addEventListener('click', (event) => {
+      if (event.target === root && this.dismissible) this.hide();
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.dismissible && this.isOpen) this.hide();
+    });
+  }
+
+  get isOpen(): boolean {
+    return !this.root.classList.contains('hidden');
+  }
 
   hide(): void {
+    this.timers.forEach((id) => window.clearTimeout(id));
+    this.timers = [];
     this.root.classList.add('hidden');
     this.root.innerHTML = '';
   }
 
-  private mount(html: string): HTMLElement {
+  private mount(html: string, dismissible: boolean): HTMLElement {
+    this.hide();
+    this.dismissible = dismissible;
     this.root.innerHTML = html;
     this.root.classList.remove('hidden');
     return this.root.firstElementChild as HTMLElement;
   }
 
   showLevels(opts: LevelPanelOptions): void {
-    let buttons = '';
+    let cards = '';
+    let earned = 0;
     for (let i = 1; i <= LEVEL_COUNT; i++) {
-      const done = opts.cleared[`l${i}`];
-      const cls = `icon${done ? ' cleared' : ''}${opts.current === i ? ' current' : ''}`;
-      buttons += `<button class="${cls}" data-level="${i}">${i}${done ? '<span class="dot"></span>' : ''}</button>`;
+      const record = opts.progress[`l${i}`];
+      const stars = record?.stars ?? 0;
+      earned += stars;
+      const cls = `lv${record ? ' done' : ''}${opts.current === i ? ' current' : ''}`;
+      cards += `<button class="${cls}" data-level="${i}" title="${levelName(i)}">
+        <canvas data-art="${i}"></canvas>
+        <span class="lv-num">${i}</span>
+        <span class="stars">${starRow(stars)}</span>
+      </button>`;
     }
 
-    const panel = this.mount(`
-      <div class="panel">
-        <h2>选择关卡</h2>
-        <p class="sub">没有时间、没有生命，想玩多久就玩多久。</p>
-        <div class="levels">${buttons}</div>
-        <div class="actions">
-          <button class="icon" data-act="random">随机图案</button>
-          <button class="icon" data-act="upload">上传图片</button>
-          <button class="icon" data-act="close">关闭</button>
+    const panel = this.mount(
+      `<div class="panel levels-panel">
+        <div class="panel-head">
+          <div>
+            <h2>选择关卡</h2>
+            <p class="sub">不限时，也不会失败 · 已收集 <b>${earned}</b> / ${LEVEL_COUNT * 3} 颗星</p>
+          </div>
+          <button class="chip small" data-act="close" aria-label="关闭">${ICON.close}</button>
         </div>
-        <input type="file" accept="image/*" style="display:none" />
-      </div>
-    `);
+        <div class="levels">${cards}</div>
+        <div class="actions">
+          <button class="btn" data-act="random">${ICON.dice}<span>随机一局</span></button>
+          <button class="btn" data-act="upload">${ICON.image}<span>用我的图片</span></button>
+        </div>
+        <input type="file" accept="image/*" hidden />
+      </div>`,
+      true,
+    );
 
+    panel.querySelectorAll<HTMLCanvasElement>('canvas[data-art]').forEach((canvas) => {
+      paintArt(canvas, levelArt(Number(canvas.dataset.art)));
+    });
+    panel.querySelector('.lv.current')?.scrollIntoView({ block: 'center' });
+
+    const input = panel.querySelector('input[type=file]') as HTMLInputElement;
     panel.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
-      const levelButton = target.closest('[data-level]') as HTMLElement | null;
-      if (levelButton) {
+      const card = target.closest('[data-level]') as HTMLElement | null;
+      if (card) {
         this.hide();
-        opts.onPick(Number(levelButton.dataset.level));
+        opts.onPick(Number(card.dataset.level));
         return;
       }
       const action = (target.closest('[data-act]') as HTMLElement | null)?.dataset.act;
@@ -76,13 +126,8 @@ export class Overlays {
         this.hide();
         opts.onRandom();
       }
-      if (action === 'upload') {
-        const input = panel.querySelector('input[type=file]') as HTMLInputElement;
-        input.click();
-      }
+      if (action === 'upload') input.click();
     });
-
-    const input = panel.querySelector('input[type=file]') as HTMLInputElement;
     input.addEventListener('change', () => {
       const file = input.files?.[0];
       if (file) {
@@ -93,26 +138,33 @@ export class Overlays {
   }
 
   showSettings(settings: Settings, onChange: (next: Settings) => void): void {
-    const panel = this.mount(`
-      <div class="panel">
-        <h2>设置</h2>
-        <p class="sub">只影响手感，不影响关卡。</p>
-        <div class="row">
-          <span>辅助线（显示每个团的边界）</span>
-          <button class="switch${settings.guides ? ' on' : ''}" data-key="guides"></button>
+    const row = (key: keyof Settings, label: string, note: string): string =>
+      `<div class="row">
+        <div><div>${label}</div><small>${note}</small></div>
+        <button class="switch${settings[key] ? ' on' : ''}" data-key="${key}" role="switch" aria-checked="${settings[key]}" aria-label="${label}"></button>
+      </div>`;
+
+    const panel = this.mount(
+      `<div class="panel">
+        <div class="panel-head">
+          <div><h2>设置</h2><p class="sub">只影响手感，不影响关卡。</p></div>
+          <button class="chip small" data-act="close" aria-label="关闭">${ICON.close}</button>
         </div>
-        <div class="row">
-          <span>减少动画</span>
-          <button class="switch${settings.reduceMotion ? ' on' : ''}" data-key="reduceMotion"></button>
-        </div>
-        <div class="actions">
-          <button class="icon primary" data-act="close">完成</button>
-        </div>
-      </div>
-    `);
+        ${row('sound', '音效', '连续送走毛线，音调会一路升高')}
+        ${row('haptics', '震动', '仅在支持震动的手机上生效')}
+        ${row('reduceMotion', '减少动画', '去掉滑出、弹回和庆祝动画')}
+        <h3>怎么玩</h3>
+        <ul class="howto">
+          <li>点一条毛线，它会顺着箭头溜出棋盘。</li>
+          <li>前面有东西挡着就会弹回来，先把挡路的送走。</li>
+          <li>不限时、不会失败；少碰壁能拿到更多星星。</li>
+          <li>双指捏合或滚轮缩放，拖动平移。</li>
+        </ul>
+      </div>`,
+      true,
+    );
 
     let current = { ...settings };
-
     panel.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       const toggle = target.closest('[data-key]') as HTMLElement | null;
@@ -120,31 +172,44 @@ export class Overlays {
         const key = toggle.dataset.key as keyof Settings;
         current = { ...current, [key]: !current[key] };
         toggle.classList.toggle('on', current[key]);
+        toggle.setAttribute('aria-checked', String(current[key]));
         onChange(current);
         return;
       }
-      if ((target.closest('[data-act]') as HTMLElement | null)?.dataset.act === 'close') {
-        this.hide();
-      }
+      if ((target.closest('[data-act]') as HTMLElement | null)?.dataset.act === 'close') this.hide();
     });
   }
 
   showWin(opts: WinPanelOptions): void {
-    const panel = this.mount(`
-      <div class="panel">
-        <h2>清空完成</h2>
-        <p class="sub">${opts.name}</p>
+    const verdict = opts.misses === 0 ? '完美通关！' : opts.stars === 3 ? '漂亮！' : '完成！';
+    const panel = this.mount(
+      `<div class="panel win${opts.animate ? ' animate' : ''}">
+        <div class="win-art"><canvas></canvas></div>
+        <div class="stars big">${starRow(opts.stars)}</div>
+        <h2>${verdict}</h2>
+        <p class="sub">${opts.title}${opts.record ? ' · <b>新纪录</b>' : ''}</p>
         <div class="stats">
-          <div><b>${opts.moves}</b><span>步数</span></div>
           <div><b>${formatTime(opts.ms)}</b><span>用时</span></div>
+          <div><b>${opts.misses}</b><span>碰壁</span></div>
+          <div><b>${opts.combo}</b><span>最高连击</span></div>
         </div>
+        ${opts.onNext ? `<button class="btn primary wide" data-act="next"><span>下一关</span>${ICON.next}</button>` : ''}
         <div class="actions">
-          <button class="icon" data-act="again">再来一次</button>
-          ${opts.onNext ? '<button class="icon primary" data-act="next">下一关</button>' : ''}
-          <button class="icon" data-act="levels">选关</button>
+          <button class="btn" data-act="again"><span>再玩一次</span></button>
+          <button class="btn" data-act="share">${ICON.share}<span>分享</span></button>
+          <button class="btn" data-act="levels"><span>选关</span></button>
         </div>
-      </div>
-    `);
+      </div>`,
+      false,
+    );
+
+    paintArt(panel.querySelector('canvas') as HTMLCanvasElement, opts.art);
+
+    if (opts.animate) {
+      for (let i = 0; i < opts.stars; i++) {
+        this.timers.push(window.setTimeout(() => opts.onStar(i), 380 + i * 240));
+      }
+    }
 
     panel.addEventListener('click', (event) => {
       const action = ((event.target as HTMLElement).closest('[data-act]') as HTMLElement | null)
@@ -156,8 +221,9 @@ export class Overlays {
         this.hide();
         opts.onNext();
       } else if (action === 'levels') {
-        this.hide();
         opts.onLevels();
+      } else if (action === 'share') {
+        opts.onShare();
       }
     });
   }
