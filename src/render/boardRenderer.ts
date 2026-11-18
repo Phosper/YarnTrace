@@ -19,8 +19,7 @@ export interface DrawState {
 
 /** How strongly the picture ghosts through where cells have already been cleared. */
 const UNDERLAY = 0.16;
-/** Dot inks: on an empty cell, on a dark or saturated cell, on a pale cell. */
-const DOT_INKS = ['rgba(128, 116, 190, 0.5)', 'rgba(255, 255, 255, 0.42)', 'rgba(58, 48, 108, 0.26)'];
+const DOTS = 'rgba(128, 116, 190, 0.5)';
 const REVEAL_STEP = 24;
 const REVEAL_POP = 260;
 
@@ -173,7 +172,7 @@ export class BoardRenderer {
     const y1 = Math.min(h, Math.ceil((cssH - camera.panY) / tile));
 
     // The board is a plain bitmap: cells butt against each other with no lines,
-    // and only a dot in the middle of each cell hints at the grid. Which cells travel
+    // and only a dot in the middle of each empty cell hints at the grid. Which cells travel
     // together is deliberately not drawn: only each piece's head carries an arrow.
     const anyBusy = state.flights.some((f) => f.kind === 'bounce');
     const hidden = (pieceId: number): boolean => anyBusy && state.isBusy(pieceId);
@@ -196,27 +195,21 @@ export class BoardRenderer {
         }
       }
 
-      // One dot in the middle of every cell; head cells carry their arrow instead.
+      // One dot in the middle of every empty cell; cells still on the board stay clean.
       const dot = Math.max(0.7, tile * 0.06);
-      for (let ink = 0; ink < DOT_INKS.length; ink++) {
-        ctx.fillStyle = DOT_INKS[ink];
-        ctx.beginPath();
-        for (let y = y0; y < y1; y++) {
-          for (let x = x0; x < x1; x++) {
-            const at = y * w + x;
-            const v = board.occ[at];
-            const shown = v !== 0 && !hidden(v - 1);
-            if (shown && board.head[at] === 1) continue;
-            const kind = !shown ? 0 : inks[board.color[at]].fill === '#ffffff' ? 1 : 2;
-            if (kind !== ink) continue;
-            const cx = (xs[x - x0] + xs[x - x0 + 1]) / 2;
-            const cy = (ys[y - y0] + ys[y - y0 + 1]) / 2;
-            ctx.moveTo(cx + dot, cy);
-            ctx.arc(cx, cy, dot, 0, Math.PI * 2);
-          }
+      ctx.fillStyle = DOTS;
+      ctx.beginPath();
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const v = board.occ[y * w + x];
+          if (v !== 0 && !hidden(v - 1)) continue;
+          const cx = (xs[x - x0] + xs[x - x0 + 1]) / 2;
+          const cy = (ys[y - y0] + ys[y - y0 + 1]) / 2;
+          ctx.moveTo(cx + dot, cy);
+          ctx.arc(cx, cy, dot, 0, Math.PI * 2);
         }
-        ctx.fill();
       }
+      ctx.fill();
     }
 
     ctx.save();
