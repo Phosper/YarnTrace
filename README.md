@@ -1,5 +1,7 @@
 # YarnTrace · 剥图消消
 
+> **在线游玩：<https://phosper.github.io/YarnTrace/>**
+
 一张像素画铺在点阵上，暗地里被切成很多「串」，每串只在头那一格画一个箭头，怎么切的并不显示。点一下箭头，它就带着身后那一串格子，顺着箭头一节一节滑出棋盘：
 
 - **能出去** → 整串滑走，原来的位置只留下淡淡的底图。
@@ -16,6 +18,8 @@ npm run build    # 类型检查 + 产物到 dist/
 npm test         # 规则 / 求解 / 生成器 / 会话 / 图案库 / 图片管线
 npm run icons    # 重新生成 public/ 下的应用图标
 ```
+
+推送到 `main` 后，GitHub Actions 会自动跑测试、构建并发布到 GitHub Pages（见 `.github/workflows/deploy.yml`）。
 
 产物是纯静态文件（约 55 KB JS + 9 KB CSS，gzip 后约 26 KB），资源路径全部是相对路径，扔到 GitHub Pages、Vercel、Cloudflare Pages 或任意静态主机的任意子目录都能跑，不需要后端。
 
