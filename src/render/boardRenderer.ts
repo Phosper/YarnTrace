@@ -19,7 +19,7 @@ export interface DrawState {
 
 /** How strongly the picture ghosts through where cells have already been cleared. */
 const UNDERLAY = 0.16;
-const GRID = 'rgba(74, 60, 140, 0.16)';
+const DOTS = 'rgba(128, 116, 190, 0.5)';
 const REVEAL_STEP = 24;
 const REVEAL_POP = 260;
 
@@ -171,9 +171,9 @@ export class BoardRenderer {
     const x1 = Math.min(w, Math.ceil((cssW - camera.panX) / tile));
     const y1 = Math.min(h, Math.ceil((cssH - camera.panY) / tile));
 
-    // The board shows the picture as plain cells on a grid. Which cells travel
+    // The board is a plain bitmap: cells butt against each other with no lines,
+    // and only a dot on every lattice point hints at the grid. Which cells travel
     // together is deliberately not drawn: only each piece's head carries an arrow.
-    const line = Math.max(1, Math.round(tile * dpr * 0.045)) / dpr;
     const anyBusy = state.flights.some((f) => f.kind === 'bounce');
     const hidden = (pieceId: number): boolean => anyBusy && state.isBusy(pieceId);
 
@@ -183,26 +183,32 @@ export class BoardRenderer {
       for (let x = x0; x <= x1; x++) xs.push(snap(camera.panX + x * tile));
       for (let y = y0; y <= y1; y++) ys.push(snap(camera.panY + y * tile));
 
-      ctx.fillStyle = GRID;
-      for (const x of xs) ctx.fillRect(x, top, line, bottom - top + line);
-      for (const y of ys) ctx.fillRect(left, y, right - left + line, line);
-
-      // Cells start after the grid line, so the grid stays visible between them.
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const at = y * w + x;
           const v = board.occ[at];
           if (v === 0 || hidden(v - 1)) continue;
-          const px = xs[x - x0] + line;
-          const py = ys[y - y0] + line;
+          const px = xs[x - x0];
+          const py = ys[y - y0];
           ctx.fillStyle = art.palette[board.color[at]];
           ctx.fillRect(px, py, xs[x - x0 + 1] - px, ys[y - y0 + 1] - py);
         }
       }
+
+      const dot = Math.max(0.7, tile * 0.05);
+      ctx.fillStyle = DOTS;
+      ctx.beginPath();
+      for (const y of ys) {
+        for (const x of xs) {
+          ctx.moveTo(x + dot, y);
+          ctx.arc(x, y, dot, 0, Math.PI * 2);
+        }
+      }
+      ctx.fill();
     }
 
     ctx.save();
-    ctx.translate(camera.panX + line / 2, camera.panY + line / 2);
+    ctx.translate(camera.panX, camera.panY);
     ctx.scale(tile, tile);
 
     for (const piece of board.pieces) {
